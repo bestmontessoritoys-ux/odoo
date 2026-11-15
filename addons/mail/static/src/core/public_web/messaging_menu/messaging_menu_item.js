@@ -63,8 +63,9 @@ export class MessagingMenuItem extends Component {
         this.hasTouch = hasTouch;
         this.isActive = computed(() => this._isActive);
         this.messageActions = useMessageActions({
-            message: () => this.message,
-            thread: () => this.message?.thread,
+            message: computed(() => this.message),
+            thread: computed(() => this.message?.thread),
+            isActive: this.isActive,
         });
         this.messageDropdownState = useDropdownState();
         if (isMobileOS()) {

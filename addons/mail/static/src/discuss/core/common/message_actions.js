@@ -4,15 +4,16 @@ import { _t } from "@web/core/l10n/translation";
 import { rpc } from "@web/core/network/rpc";
 
 registerMessageAction("set-new-message-separator", {
-    condition: ({ message, channel }) =>
-        channel?.self_member_id &&
-        channel.eq(message.channel_id) &&
-        !message.hasNewMessageSeparator &&
-        message.persistent &&
-        !message.isEmpty,
+    condition: ({ inputs }) =>
+        inputs.channel()?.self_member_id &&
+        inputs.channel().eq(inputs.message().channel_id) &&
+        !inputs.message().hasNewMessageSeparator &&
+        inputs.message().persistent &&
+        !inputs.message().isEmpty,
     icon: "visibility_off",
     name: _t("Mark as Unread"),
-    onSelected: ({ message }) => {
+    onSelected: ({ inputs }) => {
+        const message = inputs.message();
         const selfMember = message.channel_id?.self_member_id;
         if (selfMember) {
             selfMember.new_message_separator = message.id;

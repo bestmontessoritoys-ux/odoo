@@ -802,24 +802,27 @@ export class Message extends Record {
     }
 
     /**
-     * @param {Object} owner
-     * @param {import("@odoo/owl").Signal<HTMLElement>} [rootRef]
-     * @param {Readonly<Record<string, any>>} [ancestors] named ancestors of the owner, @see useAncestors
+     * @param {Object} [options]
+     * @param {import("@odoo/owl").Signal<HTMLElement>} [options.rootRef]
+     * @param {Readonly<Record<string, any>>} [options.ancestors] @see useAncestors
+     * @param {(message: Message) => void} [options.onDeleted]
      */
-    showDeleteConfirm(owner, rootRef, ancestors) {
+    showDeleteConfirm({ rootRef, ancestors, onDeleted } = {}) {
         this.store.env.services.dialog.add(
             discussComponentRegistry.get("MessageDeleteDialog"),
-            { message: this, onConfirm: () => this.onShowDeleteConfirm(owner, ancestors) },
+            { message: this, onConfirm: () => this.onShowDeleteConfirm({ ancestors, onDeleted }) },
             { rootRef }
         );
     }
 
     /**
-     * @param {Object} owner
-     * @param {Readonly<Record<string, any>>} [ancestors={}] named ancestors of the owner, @see useAncestors
+     * @param {Object} [options]
+     * @param {Readonly<Record<string, any>>} [options.ancestors={}] @see useAncestors
+     * @param {(message: Message) => void} [options.onDeleted]
      */
-    onShowDeleteConfirm(owner, ancestors = {}) {
+    onShowDeleteConfirm({ ancestors = {}, onDeleted } = {}) {
         this.remove({ removeFromThread: this.shouldHideFromMessageListOnDelete(ancestors) });
+        onDeleted?.(this);
     }
 
     /**

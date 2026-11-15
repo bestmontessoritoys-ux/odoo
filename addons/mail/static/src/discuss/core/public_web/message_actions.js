@@ -2,12 +2,13 @@ import { registerMessageAction } from "@mail/core/common/message_actions";
 import { _t } from "@web/core/l10n/translation";
 
 registerMessageAction("create-or-view-thread", {
-    condition: ({ message, channel }) =>
-        !message.isEmpty &&
-        message.channel_id?.eq(channel) &&
-        message.channel_id?.canCreateSubChannels,
+    condition: ({ inputs }) =>
+        !inputs.message().isEmpty &&
+        inputs.message().channel_id?.eq(inputs.channel()) &&
+        inputs.message().channel_id?.canCreateSubChannels,
     icon: "forum",
-    onSelected: async ({ message, store }) => {
+    onSelected: async ({ inputs, store }) => {
+        const message = inputs.message();
         if (message.linkedSubChannel) {
             const subChannel = await store["discuss.channel"].getOrFetch(
                 message.linkedSubChannel.id
@@ -17,6 +18,7 @@ registerMessageAction("create-or-view-thread", {
             message.channel_id?.createSubChannel({ initialMessage: message });
         }
     },
-    name: ({ message }) => (message.linkedSubChannel ? _t("View Thread") : _t("Create Thread")),
+    name: ({ inputs }) =>
+        inputs.message().linkedSubChannel ? _t("View Thread") : _t("Create Thread"),
     sequence: 95,
 });

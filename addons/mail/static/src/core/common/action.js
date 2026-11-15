@@ -57,7 +57,8 @@ function toArray(val) {
 /**
  * @template Action_T
  * @template UseActions_T
- * @typedef {ActionRootRefParam & {actions: UseActions_T, action: Action_T, ancestors: Readonly<Record<string, any>>, store: import("models").Store, owner: ActionOwner}} ActionParams
+ * @template [Inputs=undefined]
+ * @typedef {ActionRootRefParam & {actions: UseActions_T, action: Action_T, ancestors: Readonly<Record<string, any>>, store: import("models").Store} & (Inputs extends undefined ? {owner: ActionOwner} : {inputs: Inputs})} ActionParams
  */
 
 /** @typedef {number} ActionGroupId id of group is a number that also represents its sequence between groups! */
@@ -172,7 +173,10 @@ class ActionPanelDialog extends Component {
  * @property {string|string[]|(params: ActionParams_T) => string|string[]} [tags]
  */
 
-/** @template ActionParams_T */
+/**
+ * @template ActionParams_T
+ * @template [Inputs=undefined]
+ */
 export class Action {
     /** @type {UseActions} */
     actions;
@@ -180,6 +184,8 @@ export class Action {
     definition;
     /** @type {ActionOwner} Entity that is using this action */
     owner;
+    /** @type {Inputs} Explicit dependencies shared by an action set, without reading their signals. */
+    inputs;
     /** @type {Readonly<Record<string, any>>} Named ancestors of the owner, @see useAncestors */
     ancestors;
     /** @type {string} Unique id of this action. */
@@ -200,22 +206,28 @@ export class Action {
      * @param {Readonly<Record<string, any>>} [params0.ancestors] Named ancestors of the owner,
      *   defaults to the ones of `actions`. Required for actions made with new Action() by hand
      *   in components that depend on the ancestors.
-     * @param {ActionOwner} params0.owner
+     * @param {ActionOwner} [params0.owner] Legacy dependency for action families without explicit inputs.
+     * @param {Inputs} [params0.inputs] When supplied, the action has no component owner.
      * @param {string} params0.id
      * @param {ActionDefinition<ActionParams, Action>} params0.definition
      * @param {import("models").Store} [params0.store]
      * @param {import("@odoo/owl").Signal<HTMLElement>} [params0.rootRef] @see ActionRootRefParam
      */
-    constructor({ actions, ancestors, owner, id, definition, store, rootRef }) {
+    constructor({ actions, ancestors, owner, inputs, id, definition, store, rootRef }) {
         this.actions = actions;
         this.ancestors = ancestors ?? actions?.ancestors ?? {};
         this.definition = definition;
         this.id = id;
-        this.owner = owner;
+        this.inputs = inputs;
+        this.owner = inputs === undefined ? owner : undefined;
         this.rootRef = rootRef;
         this.store =
             store ??
-            (owner[STORE_SYM] ? owner : isRecord(owner) ? owner.store : useService("mail.store"));
+            (this.owner?.[STORE_SYM]
+                ? this.owner
+                : isRecord(this.owner)
+                ? this.owner.store
+                : useService("mail.store"));
         // Memoize the hot per-action getters as owl computeds: a reactive
         // change then only re-evaluates the actions that actually read it,
         // instead of every action of the owner on every render.
@@ -236,7 +248,7 @@ export class Action {
             action: this,
             ancestors: this.ancestors,
             store: this.store,
-            owner: this.owner,
+            ...(this.inputs === undefined ? { owner: this.owner } : { inputs: this.inputs }),
             rootRef: this.rootRef,
         };
     }
@@ -667,11 +679,12 @@ export class Action {
 /**
  * @template ActionParams_T
  * @template Action_T
+ * @template [Inputs=undefined]
  */
 export class UseActions {
     /** @type {Action_T} */
     ActionClass = Action;
-    /** @type {Component} */
+    /** @type {Component|undefined} Only legacy action families retain a component. */
     component;
     /** @type {Readonly<Record<string, any>>} Named ancestors of the component, @see useAncestors */
     ancestors = {};
@@ -683,13 +696,15 @@ export class UseActions {
     transformedActions;
     /** @type {import("models").Store} */
     store;
+    /** @type {Inputs} Explicit dependencies reused by synthetic "More" actions. */
+    inputs;
     /** @type {Action_T[]} Actions whose panel closing the current one goes back to, @see panelAction */
     panelStack = [];
     /** @type {Action_T|null} Action whose panel is shown in the panel of the owner, @see PANEL */
     panelAction = null;
 
     /**
-     * @param {Component} component
+     * @param {Component|undefined} component
      * @param {import("models").Store} store
      * @param {Action_T[]} transformedActions
      */
@@ -726,6 +741,7 @@ export class UseActions {
         } else {
             moreAction = new this.ActionClass({
                 ...actionsParams,
+                inputs: this.inputs,
                 ancestors: this.ancestors,
                 owner: this.component,
                 id: `more-action:${id}`,
@@ -846,11 +862,13 @@ function useActionState({ UseActionClass, component }) {
  * @param {typeof Action_T} ActionClass
  * @param {ActionParams_T & ActionRootRefParam} actionClassParams Forwarded to the `ActionClass`
  *   constructor; may carry a `rootRef` (@see ActionRootRefParam) shared by all action types.
+ *   Families supplying `inputs` share those dependencies without retaining the component.
  * @returns {InstanceType<UseActionClass_T>}
  */
 export function useAction(actionRegistry, UseActionClass, ActionClass, actionClassParams) {
-    const component = useScope().component;
+    const component = actionClassParams.inputs === undefined ? useScope().component : undefined;
     const actions = useActionState({ UseActionClass, component });
+    actions.inputs = actionClassParams.inputs;
     actions.ancestors = useAncestors();
     actions.actionGroupDescriptions = new Map(
         actionRegistry
@@ -870,6 +888,7 @@ export function useAction(actionRegistry, UseActionClass, ActionClass, actionCla
             ([id, definition]) =>
                 new ActionClass({
                     actions,
+                    store: actions.store,
                     owner: component,
                     id,
                     definition,
