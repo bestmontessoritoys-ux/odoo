@@ -135,7 +135,11 @@ export class Message extends Component {
         });
         this.rootRef = signal.ref(HTMLDivElement);
         this.rightClickMenu = useRightClickMenu(this.rootRef, {
-            extraMenuProps: () => ({ message: this.message, thread: this.props.thread }),
+            extraMenuProps: () => ({
+                message: this.message,
+                thread: this.props.thread,
+                actionInputs: this.messageActionInputs,
+            }),
             onClose: () => this.props.messageSelection?.clearSelected(),
             onContextMenu: (...args) => this.onContextMenu(...args),
         });
@@ -149,7 +153,6 @@ export class Message extends Component {
         this.messageBody = signal.ref(HTMLDivElement);
         this.messageContentRef = signal.ref(HTMLDivElement);
         this.richBodyRef = signal.ref(HTMLDivElement);
-        this.messageActions = useMessageActions(this.messageActionsParams);
         this.shadowBody = signal.ref(HTMLDivElement);
         this.shadowRoot = signal(null, { type: t.ref(ShadowRoot) });
         this.dialog = useService("dialog");
@@ -158,6 +161,8 @@ export class Message extends Component {
         this.openReactionMenu = this.openReactionMenu.bind(this);
         this.optionsDropdown = useDropdownState();
         this.isActive = computed(() => Boolean(this._isActive));
+        this.messageActionInputs = this.getMessageActionInputs();
+        this.messageActions = useMessageActions(this.messageActionInputs);
         useOnChange(
             () => [this.shadowBody()],
             (shadowBody) => {
@@ -307,11 +312,14 @@ export class Message extends Component {
         };
     }
 
-    get messageActionsParams() {
+    /** @returns {import("@mail/core/common/message_actions").MessageActionInputs} */
+    getMessageActionInputs() {
         return {
-            message: () => this.message,
+            message: computed(() => this.message),
             rootRef: this.rootRef,
-            thread: () => this.props.thread,
+            thread: computed(() => this.props.thread),
+            menu: { close: () => this.optionsDropdown.close() },
+            isActive: this.isActive,
         };
     }
 
@@ -337,10 +345,13 @@ export class Message extends Component {
     moreAction = computed(() => {
         const moreActions = this.moreMenuActions();
         return moreActions?.length
-            ? this.messageActions.more(this.messageActionsParams, {
-                  actions: moreActions,
-                  name: _t("Expand"),
-              })
+            ? this.messageActions.more(
+                  {},
+                  {
+                      actions: moreActions,
+                      name: _t("Expand"),
+                  }
+              )
             : undefined;
     });
 

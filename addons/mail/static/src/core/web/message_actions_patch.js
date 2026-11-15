@@ -4,9 +4,7 @@ import { _t } from "@web/core/l10n/translation";
 import { renderToMarkup } from "@web/core/utils/render";
 import { rpc } from "@web/core/network/rpc";
 
-export function messageActionOpenFullComposer(title, context, component) {
-    const message = component.props.message;
-    const thread = component.props.thread;
+export function messageActionOpenFullComposer(title, context, { message, thread, store }) {
     const action = {
         name: title,
         type: "ir.actions.act_window",
@@ -22,16 +20,19 @@ export function messageActionOpenFullComposer(title, context, component) {
             default_subtype_xmlid: "mail.mt_comment",
         },
     };
-    component.env.services.action.doAction(action, {
+    store.env.services.action.doAction(action, {
         onClose: () => thread.fetchThreadData(thread.fullComposerCloseRequestList),
     });
 }
 
 registerMessageAction("reply-all", {
-    condition: ({ ancestors, message }) => !ancestors.inMessagingMenu && message.canReplyAll,
+    condition: ({ inputs, ancestors }) =>
+        !ancestors.inMessagingMenu && inputs.message().canReplyAll,
     icon: "reply",
     name: _t("Reply All"),
-    onSelected: async ({ message, owner, store, thread }) => {
+    onSelected: async ({ inputs, store }) => {
+        const message = inputs.message();
+        const thread = inputs.thread?.();
         const recipients = await rpc("/mail/thread/recipients", {
             thread_model: thread.model,
             thread_id: thread.id,
@@ -65,15 +66,17 @@ registerMessageAction("reply-all", {
                 .filter((r) => r.recipient_type === "cc")
                 .map((r) => r.id),
         };
-        messageActionOpenFullComposer(_t("Reply All"), context, owner);
+        messageActionOpenFullComposer(_t("Reply All"), context, { message, thread, store });
     },
-    sequence: ({ message }) => (message.isSelfAuthored ? 55 : 20),
+    sequence: ({ inputs }) => (inputs.message().isSelfAuthored ? 55 : 20),
 });
 registerMessageAction("forward", {
-    condition: ({ ancestors, message }) => !ancestors.inMessagingMenu && message.canForward,
+    condition: ({ inputs, ancestors }) => !ancestors.inMessagingMenu && inputs.message().canForward,
     icon: "forward",
     name: _t("Forward"),
-    onSelected: async ({ message, owner, store }) => {
+    onSelected: async ({ inputs, store }) => {
+        const message = inputs.message();
+        const thread = inputs.thread?.();
         // usually reply_to is what you want people to see as being "from"
         // showing this avoids "leaking" the actual user when reply_to is an alias
         const emailFrom = message.reply_to || message.email_from || message.author_id?.email;
@@ -101,15 +104,17 @@ registerMessageAction("forward", {
             default_composition_comment_option: "forward",
             default_email_add_signature: false,
         };
-        messageActionOpenFullComposer(_t("Forward Message"), context, owner);
+        messageActionOpenFullComposer(_t("Forward Message"), context, { message, thread, store });
     },
     sequence: 30,
 });
 registerMessageAction("send-again", {
-    condition: ({ ancestors, message }) => !ancestors.inMessagingMenu && message.canForward,
+    condition: ({ inputs, ancestors }) => !ancestors.inMessagingMenu && inputs.message().canForward,
     icon: "send",
     name: _t("Send Again"),
-    onSelected: ({ message, owner }) => {
+    onSelected: ({ inputs, store }) => {
+        const message = inputs.message();
+        const thread = inputs.thread?.();
         const context = {
             default_attachment_ids: message.attachment_ids.map((a) => a.id),
             default_body: prepareBodyForEditing(message.body),
@@ -118,7 +123,7 @@ registerMessageAction("send-again", {
             default_partner_ids: message.partner_ids.map((p) => p.id),
             default_partner_cc_ids: message.partner_cc_ids.map((p) => p.id),
         };
-        messageActionOpenFullComposer(_t("Send Again"), context, owner);
+        messageActionOpenFullComposer(_t("Send Again"), context, { message, thread, store });
     },
     sequence: 35,
 });
